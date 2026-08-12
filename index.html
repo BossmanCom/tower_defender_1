@@ -77,6 +77,15 @@
     transition: background 0.1s;
   }
   .btn:active { background: #3a4a62; }
+  .btn-action {
+    background: #27ae60;
+    font-size: 13px;
+    padding: 10px;
+    margin-top: 4px;
+    width: 100%;
+  }
+  .btn-action:active { background: #219653; }
+  .btn-action:disabled { background: #334; color: #788; cursor: not-allowed; }
   h3 {
     margin: 4px 0 2px;
     font-size: 12px;
@@ -105,13 +114,15 @@
     <div class="stat" id="wave">Wave 1</div>
     <div class="stat" id="base">❤️ 100</div>
   </div>
-  <div id="action-tip">Tap empty grid to build ($80)</div>
+  <div id="action-tip">Intermission: Buy upgrades, then start next wave!</div>
   
   <h3>Weapon Upgrades</h3>
   <div class="btn-row" id="weaponUpgrades"></div>
   
   <h3>Defence Upgrades</h3>
   <div class="btn-row" id="defUpgrades"></div>
+
+  <button class="btn btn-action" id="waveBtn" onclick="startNextWave()">Start Wave 1</button>
 </div>
 
 <script>
@@ -124,7 +135,7 @@ const COLS = 10, ROWS = 16;
 let money = 120;
 let baseHealth = 100;
 let wave = 1;
-let waveTimer = 120;
+let waveInProgress = false;
 let zombies = [];
 let towers = [];
 let particles = [];
@@ -157,18 +168,26 @@ const path = [
 const pathSet = new Set(path.map(p=>p.x+','+p.y));
 function inPath(x,y){ return pathSet.has(x+','+y); }
 
+function startNextWave() {
+  if (waveInProgress) return;
+  waveInProgress = true;
+  document.getElementById('waveBtn').disabled = true;
+  document.getElementById('waveBtn').textContent = `Wave ${wave} In Progress...`;
+  document.getElementById('action-tip').textContent = `Defend against the horde!`;
+  spawnWave();
+}
+
 function spawnWave(){
   const count = 4 + wave * 2;
   for(let i=0; i<count; i++){
-    setTimeout(() => spawnZombie(false), i * 600);
+    setTimeout(() => { if(waveInProgress) spawnZombie(false); }, i * 600);
   }
   if(wave % 5 === 0) {
-    setTimeout(() => spawnZombie(true), count * 600 + 400);
+    setTimeout(() => { if(waveInProgress) spawnZombie(true); }, count * 600 + 400);
   }
 }
 
 function spawnZombie(isGiant){
-  // Speeds reduced by 15% (multiplied by 0.85)
   const baseSpeed = isGiant ? 0.45 : 0.85;
   const slowedSpeed = baseSpeed * 0.85;
 
@@ -180,7 +199,8 @@ function spawnZombie(isGiant){
     health: isGiant ? 400 + wave * 50 : 70 + wave * 15,
     maxHealth: isGiant ? 400 + wave * 50 : 70 + wave * 15,
     speed: slowedSpeed,
-    money: isGiant ? 60 : 15,
+    // 40% extra money payout
+    money: Math.round((isGiant ? 60 : 15) * 1.40),
     size: isGiant ? 24 : 15,
     giant: isGiant
   });
@@ -212,7 +232,8 @@ function handleInput(clientX, clientY) {
     return;
   }
 
-  const towerCost = 80;
+  // Cost to build reduced by 70% ($80 -> $24)
+  const towerCost = 24;
   if (money < towerCost) {
     document.getElementById('action-tip').textContent = `Not enough money! Need $${towerCost}`;
     return;
@@ -221,7 +242,7 @@ function handleInput(clientX, clientY) {
   money -= towerCost;
   const maxHp = 100 * statMultiplier(upgrades.defence[1], 1);
   towers.push({ gx: x, gy: y, health: maxHp, maxHealth: maxHp, cd: 0 });
-  document.getElementById('action-tip').textContent = `Tower built successfully!`;
+  document.getElementById('action-tip').textContent = `Tower built successfully! ($${towerCost})`;
 }
 
 canvas.addEventListener('touchstart', e => {
@@ -236,15 +257,7 @@ canvas.addEventListener('mousedown', e => {
 });
 
 function update(){
-  if(zombies.length === 0) {
-    waveTimer--;
-    if(waveTimer <= 0) {
-      wave++;
-      waveTimer = 240;
-      document.getElementById('wave').textContent = `Wave ${wave}`;
-      spawnWave();
-    }
-  }
+  if(!waveInProgress) return;
 
   // Move zombies
   zombies.forEach(z => {
@@ -282,8 +295,19 @@ function update(){
     return true;
   });
 
-  // Tower Combat (Fire rate increased by 20%: multiplied by 1.2)
-  const dmg = 25 * statMultiplier(upgrades.weapon[0], 1);
+  // Check if wave is cleared
+  if(zombies.length === 0) {
+    waveInProgress = false;
+    wave++;
+    document.getElementById('wave').textContent = `Wave ${wave}`;
+    const waveBtn = document.getElementById('waveBtn');
+    waveBtn.disabled = false;
+    waveBtn.textContent = `Start Wave ${wave}`;
+    document.getElementById('action-tip').textContent = `Intermission: Buy upgrades, then start next wave!`;
+  }
+
+  // Tower Combat (Extra 20% damage: multiplied by 1.2, fire rate 20% faster)
+  const dmg = 25 * 1.20 * statMultiplier(upgrades.weapon[0], 1);
   const range = 140 * statMultiplier(upgrades.weapon[1], 1);
   const fireRate = (0.8 * 1.2) * statMultiplier(upgrades.weapon[2], 1);
   const critChance = 0.1 * statMultiplier(upgrades.weapon[4], 1);
@@ -441,7 +465,6 @@ function buyUpgrade(u){
 }
 
 buildUI();
-spawnWave();
 loop();
 </script>
 </body>
