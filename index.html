@@ -136,6 +136,8 @@ let money = 120;
 let baseHealth = 100;
 let wave = 1;
 let waveInProgress = false;
+let enemiesSpawnedCount = 0;
+let totalEnemiesInWave = 0;
 let zombies = [];
 let towers = [];
 let particles = [];
@@ -171,6 +173,9 @@ function inPath(x,y){ return pathSet.has(x+','+y); }
 function startNextWave() {
   if (waveInProgress) return;
   waveInProgress = true;
+  enemiesSpawnedCount = 0;
+  totalEnemiesInWave = (4 + wave * 2) + (wave % 5 === 0 ? 1 : 0);
+  
   document.getElementById('waveBtn').disabled = true;
   document.getElementById('waveBtn').textContent = `Wave ${wave} In Progress...`;
   document.getElementById('action-tip').textContent = `Defend against the horde!`;
@@ -180,10 +185,20 @@ function startNextWave() {
 function spawnWave(){
   const count = 4 + wave * 2;
   for(let i=0; i<count; i++){
-    setTimeout(() => { spawnZombie(false); }, i * 600);
+    setTimeout(() => { 
+      if(waveInProgress) {
+        spawnZombie(false);
+        enemiesSpawnedCount++;
+      }
+    }, i * 600);
   }
   if(wave % 5 === 0) {
-    setTimeout(() => { spawnZombie(true); }, count * 600 + 400);
+    setTimeout(() => { 
+      if(waveInProgress) {
+        spawnZombie(true);
+        enemiesSpawnedCount++;
+      }
+    }, count * 600 + 400);
   }
 }
 
@@ -293,9 +308,8 @@ function update(){
     return true;
   });
 
-  // Check if wave is fully cleared
-  const totalWaveSpawns = 4 + wave * 2 + (wave % 5 === 0 ? 1 : 0);
-  if(waveInProgress && zombies.length === 0) {
+  // Check if wave is fully completed (all spawned AND all cleared)
+  if(waveInProgress && enemiesSpawnedCount >= totalEnemiesInWave && zombies.length === 0) {
     waveInProgress = false;
     wave++;
     document.getElementById('wave').textContent = `Wave ${wave}`;
