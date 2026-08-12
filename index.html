@@ -168,6 +168,10 @@ function spawnWave(){
 }
 
 function spawnZombie(isGiant){
+  // Speeds reduced by 15% (multiplied by 0.85)
+  const baseSpeed = isGiant ? 0.45 : 0.85;
+  const slowedSpeed = baseSpeed * 0.85;
+
   zombies.push({
     gx: path[0].x, gy: path[0].y,
     px: path[0].x * GRID + GRID / 2,
@@ -175,7 +179,7 @@ function spawnZombie(isGiant){
     idx: 0,
     health: isGiant ? 400 + wave * 50 : 70 + wave * 15,
     maxHealth: isGiant ? 400 + wave * 50 : 70 + wave * 15,
-    speed: isGiant ? 0.45 : 0.85,
+    speed: slowedSpeed,
     money: isGiant ? 60 : 15,
     size: isGiant ? 24 : 15,
     giant: isGiant
@@ -278,10 +282,10 @@ function update(){
     return true;
   });
 
-  // Tower Combat (Fixed Range Check)
+  // Tower Combat (Fire rate increased by 20%: multiplied by 1.2)
   const dmg = 25 * statMultiplier(upgrades.weapon[0], 1);
   const range = 140 * statMultiplier(upgrades.weapon[1], 1);
-  const fireRate = 0.8 * statMultiplier(upgrades.weapon[2], 1);
+  const fireRate = (0.8 * 1.2) * statMultiplier(upgrades.weapon[2], 1);
   const critChance = 0.1 * statMultiplier(upgrades.weapon[4], 1);
 
   towers.forEach(t => {
@@ -290,7 +294,6 @@ function update(){
 
     let target = null;
     let bestDist = Infinity;
-    // Center point of the tower in pixels
     const tx = t.gx * GRID + GRID / 2;
     const ty = t.gy * GRID + GRID / 2;
 
@@ -421,7 +424,7 @@ function buildUI(){
     b.className = 'btn';
     b.textContent = `${u.name} L${u.level}\n$${cost(u)}`;
     b.onclick = () => buyUpgrade(u);
-    wDiv.appendChild(b);
+    dDiv.appendChild(b);
   });
 }
 
