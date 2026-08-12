@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Zombie Tower Defense Mobile</title>
+<style>
+  html,body{margin:0;background:#0b0f14;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+  canvas{display:block;background:#0e141c;margin:0 auto;touch-action:none}
+  #ui{position:fixed;left:0;right:0;bottom:0;padding:8px;background:linear-gradient(transparent,rgba(0,0,0,.8));}
+  .bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+  .stat{background:#1a2433;padding:6px 10px;border-radius:10px;font-weight:600;font-size:14px}
+  .btn{background:#2a3a52;border:0;color:#fff;padding:10px 12px;border-radius:12px;font-weight:700;font-size:14px;flex:1 1 30%}
+  .btn:active{background:#3a4a62}
+  .row{display:flex;gap:6px}
+  h3{margin:4px 0 6px;font-size:14px;color:#aab}
+</style>
+</head>
+<body>
+<canvas id="game" width="400" height="700"></canvas>
+<div id="ui">
+  <div class="bar">
+    <div class="stat" id="money">💰 100</div>
+    <div class="stat" id="wave">Wave 1</div>
+    <div class="stat" id="base">❤️ 100</div>
+  </div>
+  <h3>Weapon Upgrades</h3>
+  <div class="row" id="weaponUpgrades"></div>
+  <h3>Defence Upgrades</h3>
+  <div class="row" id="defUpgrades"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const GRID = 40;
+const COLS = 10, ROWS = 17;
+
+let money = 100;
+let baseHealth = 100;
+let wave = 1;
+let waveTimer = 0;
+let zombies = [];
+let towers = [];
+let particles = [];
+
+const upgrades = {
+  weapon: [
+    {name:'Damage',    level:0, base:50},
+    {name:'Range',     level:0, base:40},
+    {name:'Fire Rate', level:0, base:60},
+    {name:'Splash',    level:0, base:100},
+    {name:'Crit',      level:0, base:80}
+  ],
+  defence: [
+    {name:'Base HP',   level:0, base:120},
+    {name:'Tower HP',  level:0, base:90},
+    {name:'Armor',     level:0, base:70},
+    {name:'Regen',     level:0, base:150},
+    {name:'Repair',    level:0, base:200}
+  ]
+};
+
+function cost(u){ return Math.round(u.base * Math.pow(1.6, u.level)); }
+function stat(u, base){ return base + u.level * 0.15 * base; }
+
+const path = [
+  {x:4,y:0},{x:4,y:3},{x:2,y:3},{x:2,y:6},{x:5,y:6},{x:5,y:9},
+  {x:7,y:9},{x:7,y:12},{x:4,y:12},{x:4,y:16}
+];
+const pathSet = new Set(path.map(p=>p.x+','+p.y));
+
+function inPath(x,y){ return pathSet.has(x+','+y); }
+
+function spawnWave(){
+  const count = 5 + wave*2;
+  for(let i=0;i<count;i++){
+    setTimeout(()=>spawnZombie(false), i*700);
+  }
+  if(wave%5===0) setTimeout(()=>spawnZombie(true), count*700+500);
+}
+function spawnZombie(isGiant){
+  zombies.push({
+    gx:path[0].x, gy:path[0].y,
+    px:path[0].x*GRID+GRID/2, py:path[0].y*GRID+GRID/2,
+    idx:0, health:isGiant?500:80, maxHealth:isGiant?500:80,
+    speed:isGiant?0.4:0.9, money:isGiant?75:20,
+    size:isGiant?28:18, giant:isGiant
+  });
+}
+
+function placeTower(gx,gy){
+  if(inPath(gx,gy) || towers.some(t=>t.gx===gx&&t.gy===gy)) return;
+  if(money<80) return;
+  money-=80;
+  const tHp = 120 * stat(upgrades.defence[1], 1);
+  towers.push({gx,gy, health:tHp, maxHealth:tHp, cd:0});
+}
+
+canvas.addEventListener('touchstart', e=>{
+  const t=e.changedTouches[0];
+  const r=canvas.getBoundingClientRect();
+  const x=Math.floor((t.clientX-r.left)/r.width*W/GRID);
+  const y=Math.floor((t.clientY-r.top)/r.height*H/GRID);
+  if(y<ROWS) placeTower(x,y);
+});
+canvas.addEventListener('mousedown', e=>{
+  const r=canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left)/r.width*W/GRID);
+  const y=Math.floor((e.clientY-r.top)/r.height*H/GRID);
+  if(y<ROWS) placeTower(x,y);
+});
+
+function update(){
+  waveTimer--;
+  if(waveTimer<=0 && zombies.length===0){
+    wave++;
+    waveTimer=180;
+    document.getElementById('wave').textContent=`Wave ${wave}`;
+    spawnWave();
+  }
+
+  // zombies
+  zombies.forEach(z=>{
+    const target=path[Math.min(z.idx+1,path.length-1)];
+    const gx=target.x, gy=target.y;
+    const dx=gx*GRID+GRID/2 - z.px;
+    const dy=gy*GRID+GRID/2 - z.py;
+    const dist=Math.hypot(dx,dy);
+    if(dist<2){z.idx++;z.px=gx*GRID+GRID/2;z.py=gy*GRID+GRID/2;}
+    else{
+      z.px+=dx/dist*z.speed;
+      z.py+=dy/dist*z.speed;
+    }
+  });
+  zombies=zombies.filter(z=>{
+    if(z.health<=0){
+      money+=z.money;
+      for(let i=0;i<6;i++) particles.push({x:z.px,y:z.py,vx:(Math.random()-0.5)*2,vy:(Math.random()-0.5)*2,life:20});
+      return false;
+    }
+    if(z.idx>=path.length-1){
+      baseHealth-=0.2;
+      if(baseHealth<=0){ baseHealth=0; }
+    }
+    if(z.idx>=path.length){
+      money-=10;
+      return false;
+    }
+    return true;
+  });
+
+  // towers attack
+  const dmg = 25*stat(upgrades.weapon[0],1);
+  const range = 140*stat(upgrades.weapon[1],1);
+  const fireRate = 0.4*stat(upgrades.weapon[2],1);
+  towers.forEach(t=>{
+    t.cd=Math.max(0,t.cd-1/60);
+    if(t.cd>0) return;
+    let target=null, best=Infinity;
+    zombies.forEach(z=>{
+      const dx=z.px-(t.gx*GRID+GRID/2);
+      const dy=z.py-(t.gy*GRID+GRID/2);
+      const d=Math.hypot(dx,dy);
+      if(d<range && d<best){best=d;target=z;}
+    });
+    if(target){
+      t.cd=1/fireRate;
+      target.health-=dmg*(Math.random()<0.1*stat(upgrades.weapon[4],1)?2:1);
+      particles.push({x:target.px,y:target.py,vx:0,vy:-2,life:15});
+    }
+  });
+
+  // regen & repair
+  const maxBaseHp = 200 * stat(upgrades.defence[0], 1);
+  baseHealth=Math.min(maxBaseHp, baseHealth+0.02*stat(upgrades.defence[3],1));
+  towers.forEach(t=>{
+    t.health=Math.min(t.maxHealth, t.health+0.01*stat(upgrades.defence[4],1));
+  });
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='#1e2a3a';
+  ctx.lineWidth=1;
+  for(let i=0;i<=COLS;i++){ctx.beginPath();ctx.moveTo(i*GRID,0);ctx.lineTo(i*GRID,H);ctx.stroke();}
+  for(let i=0;i<=ROWS;i++){ctx.beginPath();ctx.moveTo(0,i*GRID);ctx.lineTo(W,i*GRID);ctx.stroke();}
+  // path
+  ctx.fillStyle='#2b3a4a';
+  path.forEach(p=>ctx.fillRect(p.x*GRID+4,p.y*GRID+4,GRID-8,GRID-8));
+  // towers
+  towers.forEach(t=>{
+    const x=t.gx*GRID+GRID/2, y=t.gy*GRID+GRID/2;
+    ctx.fillStyle='#3a7';
+    ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#1a2';ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();
+  });
+  // zombies
+  zombies.forEach(z=>{
+    ctx.fillStyle=z.giant?'#c33':'#8a4';
+    ctx.beginPath();ctx.arc(z.px,z.py,z.size,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#000';ctx.fillRect(z.px-18,z.py-z.size-10,36,4);
+    ctx.fillStyle='#f33';ctx.fillRect(z.px-18,z.py-z.size-10,36*(z.health/z.maxHealth),4);
+  });
+  // particles
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--;});
+  particles=particles.filter(p=>p.life>0);
+  particles.forEach(p=>{ctx.fillStyle='#ffde7a';ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();});
+}
+
+function loop(){
+  update();
+  draw();
+  document.getElementById('money').textContent=`💰 ${Math.floor(money)}`;
+  document.getElementById('base').textContent=`❤️ ${Math.max(0,Math.floor(baseHealth))}`;
+  requestAnimationFrame(loop);
+}
+
+function buildUI(){
+  const wDiv=document.getElementById('weaponUpgrades');
+  wDiv.innerHTML = '';
+  upgrades.weapon.forEach((u,i)=>{
+    const b=document.createElement('button');
+    b.className='btn'; 
+    b.textContent=`${u.name} L${u.level} $${cost(u)}`;
+    b.onclick=()=>buy(u, i, true);
+    wDiv.appendChild(b);
+  });
+  
+  const dDiv=document.getElementById('defUpgrades');
+  dDiv.innerHTML = '';
+  upgrades.defence.forEach((u,i)=>{
+    const b=document.createElement('button');
+    b.className='btn'; 
+    b.textContent=`${u.name} L${u.level} $${cost(u)}`;
+    b.onclick=()=>buy(u, i, false);
+    dDiv.appendChild(b);
+  });
+}
+
+function buy(u,idx,isWeapon){
+  const c=cost(u);
+  if(money<c) return;
+  money-=c; 
+  u.level++;
+  buildUI();
+}
+
+buildUI();
+loop();
+</script>
+</body>
+</html>
