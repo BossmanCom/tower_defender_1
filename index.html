@@ -180,10 +180,10 @@ function startNextWave() {
 function spawnWave(){
   const count = 4 + wave * 2;
   for(let i=0; i<count; i++){
-    setTimeout(() => { if(waveInProgress) spawnZombie(false); }, i * 600);
+    setTimeout(() => { spawnZombie(false); }, i * 600);
   }
   if(wave % 5 === 0) {
-    setTimeout(() => { if(waveInProgress) spawnZombie(true); }, count * 600 + 400);
+    setTimeout(() => { spawnZombie(true); }, count * 600 + 400);
   }
 }
 
@@ -199,7 +199,6 @@ function spawnZombie(isGiant){
     health: isGiant ? 400 + wave * 50 : 70 + wave * 15,
     maxHealth: isGiant ? 400 + wave * 50 : 70 + wave * 15,
     speed: slowedSpeed,
-    // 40% extra money payout
     money: Math.round((isGiant ? 60 : 15) * 1.40),
     size: isGiant ? 24 : 15,
     giant: isGiant
@@ -232,7 +231,6 @@ function handleInput(clientX, clientY) {
     return;
   }
 
-  // Cost to build reduced by 70% ($80 -> $24)
   const towerCost = 24;
   if (money < towerCost) {
     document.getElementById('action-tip').textContent = `Not enough money! Need $${towerCost}`;
@@ -295,8 +293,9 @@ function update(){
     return true;
   });
 
-  // Check if wave is cleared
-  if(zombies.length === 0) {
+  // Check if wave is fully cleared
+  const totalWaveSpawns = 4 + wave * 2 + (wave % 5 === 0 ? 1 : 0);
+  if(waveInProgress && zombies.length === 0) {
     waveInProgress = false;
     wave++;
     document.getElementById('wave').textContent = `Wave ${wave}`;
@@ -306,7 +305,7 @@ function update(){
     document.getElementById('action-tip').textContent = `Intermission: Buy upgrades, then start next wave!`;
   }
 
-  // Tower Combat (Extra 20% damage: multiplied by 1.2, fire rate 20% faster)
+  // Tower Combat
   const dmg = 25 * 1.20 * statMultiplier(upgrades.weapon[0], 1);
   const range = 140 * statMultiplier(upgrades.weapon[1], 1);
   const fireRate = (0.8 * 1.2) * statMultiplier(upgrades.weapon[2], 1);
