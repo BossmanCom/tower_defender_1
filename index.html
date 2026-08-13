@@ -206,15 +206,25 @@ function spawnZombie(isGiant){
   const baseSpeed = isGiant ? 0.45 : 0.85;
   const slowedSpeed = baseSpeed * 0.85;
 
+  // Extra scaling factor every 5 levels (e.g. wave 5, 10, 15 gets a multiplier boost)
+  const tierMultiplier = 1 + Math.floor(wave / 5) * 0.25;
+
+  const rawHealth = isGiant ? (400 + wave * 50) : (70 + wave * 15);
+  const scaledHealth = Math.round(rawHealth * tierMultiplier);
+
+  // Reduced kill money by 10% overall from previous value (multiplied by 0.90)
+  const baseMoney = isGiant ? 60 : 15;
+  const scaledMoney = Math.round(baseMoney * 1.40 * 0.90 * tierMultiplier);
+
   zombies.push({
     gx: path[0].x, gy: path[0].y,
     px: path[0].x * GRID + GRID / 2,
     py: path[0].y * GRID + GRID / 2,
     idx: 0,
-    health: isGiant ? 400 + wave * 50 : 70 + wave * 15,
-    maxHealth: isGiant ? 400 + wave * 50 : 70 + wave * 15,
+    health: scaledHealth,
+    maxHealth: scaledHealth,
     speed: slowedSpeed,
-    money: Math.round((isGiant ? 60 : 15) * 1.40),
+    money: scaledMoney,
     size: isGiant ? 24 : 15,
     giant: isGiant
   });
@@ -308,7 +318,7 @@ function update(){
     return true;
   });
 
-  // Check if wave is fully completed (all spawned AND all cleared)
+  // Check if wave is fully completed
   if(waveInProgress && enemiesSpawnedCount >= totalEnemiesInWave && zombies.length === 0) {
     waveInProgress = false;
     wave++;
